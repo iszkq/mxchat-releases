@@ -1,0 +1,56 @@
+# mxchat 源码与版本发布流程
+
+## 仓库职责
+
+- 源代码、问题修复、版本号、工作流、测试与发布说明：[iszkq/mxchat](https://github.com/iszkq/mxchat)。以后仍在这里更新原代码。
+- 公开下载、GitHub Releases、客户端自动更新元数据：[iszkq/mxchat-releases](https://github.com/iszkq/mxchat-releases)。此仓库不维护应用源码。
+- 源码仓库可以保持私有，**版本仓库必须保持公开**，否则无凭证的客户端无法更新。客户端不保存 GitHub Token。
+
+## 版本规则与客户端行为
+
+版本使用递增稳定语义版本，例如 `0.3.58` → `0.3.59`，标签为 `v0.3.59`。不要覆盖已经发布的标签或附件。草稿、预发布和低版本不推送给稳定客户端。
+
+Windows 正式安装版启动约 15 秒后检查，以后每 6 小时检查；「设置 → 关于 mxchat」也可手动检查。不会自动下载，不会在普通退出时自动安装。下载后校验 SHA512，点击「重启安装」并确认才启动安装程序。数据目录、appId 和安装方式保持不变。开发模式/网页不支持安装更新。
+
+0.3.57 及更早版本需要手动安装 0.3.58 一次。新版安装到原目录，保留本机数据。当前安装包未签名，哈希不是签名，正式推广前建议配置 Windows 代码签名并验证证书轮换。
+
+## 每次发布
+
+1. 在**源码仓库**更新、测试代码；修改 `package.json` 与 `package-lock.json` 的版本号，新建 `release-notes/v版本号.md`。不要改变 `build.appId`、更新仓库、NSIS 安装标识和数据目录。
+2. 执行 `npm ci`、相关测试、`npm run build:bible`、`npm run build:tools-dashboard`、`npm run dist:win -- --publish never`。推荐干净构建；必须使用同一轮构建的 `.exe`、`.exe.blockmap`、`latest.yml`。不要使用 `--publish always` 直接发布不完整版本。
+3. 提交并推送源码到 `iszkq/mxchat` 的 `main`，确认 Actions 构建通过。源码提交号将写入公开版本说明（访问私有源码仍需权限）。
+4. 在源码仓库目录设置仅对版本仓库具有 Contents 读写权限的 `GH_TOKEN`，然后执行 `npm run release:public`。脚本先验证版本、大小与 SHA512，创建公开仓库中的**草稿**，上传全部附件，验证上传大小/摘要后才发布为 Latest。令牌只留在进程环境，不得写入任何源码、客户端、YAML、日志或文档；执行完清除环境变量。
+5. 未配置发布 Token 时，也可在版本仓库网页手动建草稿，按下面清单全部上传、检查后再正式发布。GitHub 自动生成的 Source code.zip 只是版本仓库文档，**不是安装包或应用源码**。
+6. 用旧版正式客户端验证发现新版本、下载校验、取消/重试；在受控测试设备验证确认后的重启安装、版本号及原登录/本机数据保留。不能以上传成功代替安装验收。
+
+```powershell
+# 已完成上述构建，源码已推送。不要将真实 Token 写入脚本。
+node scripts/publish-release.mjs --verify-only
+# 在当前终端安全设置 GH_TOKEN 后：
+npm run release:public
+Remove-Item Env:GH_TOKEN
+```
+
+`--verify-only` 不访问网络，可先验证本地附件。脚本失败会保留草稿，不自动删除/覆盖；先检查草稿和附件，再决定补齐或删除未发布草稿后重试。使用官方来源和正常 TLS，不关闭证书或安装包校验。
+
+## 一个 Release 必须包含
+
+| 文件 | 用途 |
+| --- | --- |
+| `mxchat-版本号-Setup.exe` | Windows x64 NSIS 安装包 |
+| `mxchat-版本号-Setup.exe.blockmap` | 增量下载辅助；不支持时回退完整下载 |
+| `latest.yml` | 与安装包同构建的版本、文件名、大小、SHA512 |
+| `mxchat-版本号-Setup.exe.sha256` | 手工校验 |
+
+可选附件：`bible-tool.zip`、对应 `SHA256.txt`、后台 `worker.txt`。小工具目录中的 ZIP 下载地址应使用公开 Release 附件直链，SHA256 使用 ZIP 文件本身的摘要，不能填网页链接或 `.exe` 的摘要。更换资源包需同步更新后台版本和摘要。
+
+## GitHub Actions
+
+推送 `main` 只构建并上传 Actions 产物，不自动对外发布。手动运行 **Build Windows installer**，勾选 `publish_release` 才会发布到版本仓库。需先在**源码仓库** Actions Secrets 设置 `RELEASES_TOKEN`（建议 Fine-grained PAT，仅选择 `mxchat-releases`，Contents: Read and write）。默认 `GITHUB_TOKEN` 只对源码仓库有效，不能跨仓库上传。不要把本机已登录的宽权限凭证自动复制为 Secret。建议配置仓库环境审核及签名。
+
+## 更新故障和回退
+
+- GitHub 访问受限、API 限流或无正式 Release：保留当前应用，稍后手动重试，或从公开版本仓库手工下载。
+- 摘要失败：不安装，检查同一 Release 的安装包和元数据是否匹配。不要跳过验证。
+- 新版有问题：发布递增补丁版本；自动更新禁止降级。手动回退前先备份数据，较新数据格式不保证可被旧客户端读取。
+- 后台部署独立进行：把 `dist-admin/worker.txt` 部署到现有 Cloudflare Worker，保留 `CATALOG` KV 与 `ADMIN_TOKEN`，刷新浏览器。发布桌面版本不会自动更新后台。
