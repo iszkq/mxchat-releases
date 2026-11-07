@@ -17,7 +17,7 @@ Windows 正式安装版启动约 15 秒后检查，以后每 6 小时检查；�
 ## 每次发布
 
 1. 在**源码仓库**更新、测试代码；修改 `package.json` 与 `package-lock.json` 的版本号，新建 `release-notes/v版本号.md`。不要改变 `build.appId`、更新仓库、NSIS 安装标识和数据目录。
-2. 执行 `npm ci`、相关测试、`npm run build:bible`、`npm run build:tools-dashboard`、`npm run dist:win -- --publish never`。推荐干净构建；必须使用同一轮构建的 `.exe`、`.exe.blockmap`、`latest.yml`。不要使用 `--publish always` 直接发布不完整版本。
+2. 执行 `npm ci`、相关测试、`npm run build:tools-dashboard`、`npm run dist:win -- --publish never`。推荐干净构建；必须使用同一轮构建的 `.exe`、`.exe.blockmap`、`latest.yml`。不要使用 `--publish always` 直接发布不完整版本。
 3. 提交并推送源码到 `iszkq/mxchat` 的 `main`，确认 Actions 构建通过。源码提交号将写入公开版本说明（访问私有源码仍需权限）。
 4. 在源码仓库目录设置仅对版本仓库具有 Contents 读写权限的 `GH_TOKEN`，然后执行 `npm run release:public`。脚本先验证版本、大小与 SHA512，创建公开仓库中的**草稿**，上传全部附件，验证上传大小/摘要后才发布为 Latest。令牌只留在进程环境，不得写入任何源码、客户端、YAML、日志或文档；执行完清除环境变量。
 5. 未配置发布 Token 时，也可在版本仓库网页手动建草稿，按下面清单全部上传、检查后再正式发布。GitHub 自动生成的 Source code.zip 只是版本仓库文档，**不是安装包或应用源码**。
@@ -42,7 +42,7 @@ Remove-Item Env:GH_TOKEN
 | `latest.yml` | 与安装包同构建的版本、文件名、大小、SHA512 |
 | `mxchat-版本号-Setup.exe.sha256` | 手工校验 |
 
-可选附件：`bible-tool.zip`、对应 `SHA256.txt`、后台 `worker.txt`。小工具目录中的 ZIP 下载地址应使用公开 Release 附件直链，SHA256 使用 ZIP 文件本身的摘要，不能填网页链接或 `.exe` 的摘要。更换资源包需同步更新后台版本和摘要。
+可选附件仅包括后台 `worker.txt`。具体小工具源码、数据、ZIP、校验文件只在本地制作，使用独立文件托管；不得附加到源码仓库、Actions 产物或客户端 Release。发布脚本不自动收集小工具。
 
 ## GitHub Actions
 
@@ -65,8 +65,12 @@ Remove-Item Env:GH_TOKEN
 | ZIP 清单 `kind: web` | 独立窗口：安装后使用 |
 | EXE / MSI / 7Z、无 mxchat 清单的普通 ZIP / MSIX | 软件资源：始终下载，可重复下载 |
 
-后台选择同一个本地资源文件即可生成 SHA256，无需把文件上传给 Worker；云盘跨域失败时优先用本地计算。后台仅保存目录，文件需先托管为 HTTPS 直链（可用本公开仓库 Release 附件）。软件资源还要核对保存文件名，支持 `.exe .msi .msix .zip .7z`，上限 900 MB。不支持脚本、快捷方式，也不把未知 JS/DLL 当作 mxchat 插件执行。有工具清单的 ZIP 优先按清单识别；若只想当文件分发，可手动选择“软件 / 资源下载”后重新计算。
+后台选择同一个本地资源文件即可生成 SHA256，无需把文件上传给 Worker；云盘跨域失败时优先用本地计算。后台仅保存目录，文件需先托管为 HTTPS 直链（使用独立资源托管，不使用本仓库 Release）。软件资源还要核对保存文件名，支持 `.exe .msi .msix .zip .7z`，上限 900 MB。不支持脚本、快捷方式，也不把未知 JS/DLL 当作 mxchat 插件执行。有工具清单的 ZIP 优先按清单识别；若只想当文件分发，可手动选择“软件 / 资源下载”后重新计算。
 
 客户端下载按钮在卡片与详情均可见。每次点击先弹系统保存路径；保存前 SHA256 和格式校验，取消或失败不替换已有文件，成功后仍可再次下载。不自动打开/安装，也不在 mxchat 已安装清单中登记。实际安装时用户应自行核对发布者与签名。
 
-发布新版圣经 ZIP 后请同步更新后台直链和 SHA256；已有工具应编辑原条目，保留 ID，关闭工具窗口再更新。后台也须部署本版 `dist-admin/worker.txt` 才能识别 software/web 类型；仅推送源码或发布客户端不会更新已经部署的 Worker。
+在本地制作并托管新版工具 ZIP 后请同步更新后台直链和 SHA256；已有工具应编辑原条目，保留 ID，关闭工具窗口再更新。后台也须部署本版 `dist-admin/worker.txt` 才能识别 software/web 类型；仅推送源码或发布客户端不会更新已经部署的 Worker。
+
+## 小工具本地维护
+
+按维护者要求，具体小工具已从当前源码树与既有 Release 附件移除；历史 Git 提交未改写。已有后台指向被移除附件的条目需更换为独立资源托管直链与对应 SHA256，保留工具 ID。客户端的通用安装、独立窗口与软件下载能力仍在源码中维护。不要再次提交本地插件目录、经文数据、工具测试或构建包；`.gitignore` 与 CI/发布脚本均排除这些内容。
